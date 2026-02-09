@@ -1,0 +1,210 @@
+import React, { useState } from 'react';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Image, Alert, Dimensions } from 'react-native';
+import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system/legacy';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+
+const screenWidth = Dimensions.get('window').width;
+
+export default function App() {
+  const [type, setType] = useState('code128');
+  const [input, setInput] = useState('');
+  const [list, setList] = useState([]);
+  const [isScanning, setIsScanning] = useState(false);
+  
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const handleGenerate = () => {
+    if (!input.trim()) return Alert.alert("알림", "데이터를 입력해주세요!");
+    const lines = input.split('\n').filter(l => l.trim() !== '');
+    const results = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      let data = line;
+      let apiType = type === 'code128' ? '128' : type;
+
+      if (type === 'datamatrix_hkmc') {
+        const parts = line.split(/[,\t]|\s{2,}/).filter(p => p.trim() !== '');
+        if (parts.length < 3) {
+          return Alert.alert("데이터 부족", `[${i+1}행] 정보가 부족합니다.\n품번, 업체, 수량을 입력해 주세요.`);
+        }
+        apiType = 'datamatrix';
+        data = `P${parts[0].trim()}V${parts[1].trim()}Q${parts[2].trim()}`;
+      }
+      const imageUrl = `https://barcodeapi.org/api/${apiType}/${encodeURIComponent(data)}`;
+      results.push({ id: i, data, url: imageUrl, key: Math.random().toString() });
+    }
+    setList(results);
+  };
+
+  // [추가] 1. 입력창 및 리스트 초기화 함수
+  const handleClear = () => {
+    Alert.alert("초기화", "모든 입력 내용과 생성된 바코드를 지우시겠습니까?", [
+      { text: "취소", style: "cancel" },
+      { text: "확인", onPress: () => { setInput(''); setList([]); } }
+    ]);
+  };
+
+  // [추가] 2. 모든 바코드 일괄 저장 함수
+  const saveAllImages = async () => {
+    if (list.length === 0) return Alert.alert("알림", "저장할 바코드가 없습니다.");
+
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') return Alert.alert("권한 필요", "사진첩 권한을 허용해주세요.");
+
+      Alert.alert("일괄 저장 시작", `${list.length}개의 바코드를 저장합니다. 잠시만 기다려 주세요...`);
+
+      for (const item of list) {
+        const fileUri = FileSystem.cacheDirectory + `barcode_${Math.random().toString(36).substring(7)}.png`;
+        const download = await FileSystem.downloadAsync(item.url, fileUri);
+        await MediaLibrary.saveToLibraryAsync(download.uri);
+      }
+
+      Alert.alert("성공", "모든 바코드가 사진첩에 저장되었습니다! 🎉");
+    } catch (error) {
+      Alert.alert("실패", "일괄 저장 중 오류가 발생했습니다.");
+    }
+  };
+
+  const openScanner = async () => {
+    if (!permission) return Alert.alert("알림", "준비 중입니다.");
+    if (!permission.granted) {
+      const { granted } = await requestPermission();
+      if (!granted) return Alert.alert("권한 필요", "카메라 권한이 필요합니다.");
+    }
+    setIsScanning(true);
+  };
+
+  const handleBarCodeScanned = ({ data }) => {
+    setIsScanning(false);
+    setInput(prev => prev + (prev ? "\n" : "") + data);
+  };
+
+  const saveImage = async (url) => {
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') return Alert.alert("권한 필요", "사진첩 권한이 필요합니다.");
+      const fileUri = FileSystem.cacheDirectory + `barcode_${Date.now()}.png`;
+      const download = await FileSystem.downloadAsync(url, fileUri);
+      await MediaLibrary.saveToLibraryAsync(download.uri);
+      Alert.alert("성공", "갤러리에 저장되었습니다.");
+    } catch (error) {
+      Alert.alert("실패", "저장 중 오류가 발생했습니다.");
+    }
+  };
+
+  if (isScanning) {
+    return (
+      <View style={styles.scannerContainer}>
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          onBarcodeScanned={handleBarCodeScanned}
+          barcodeScannerSettings={{ barcodeTypes: ["qr", "datamatrix", "code128"] }}
+        />
+        <TouchableOpacity style={styles.closeBtn} onPress={() => setIsScanning(false)}>
+          <Text style={styles.closeBtnText}>닫기</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={{paddingBottom: 40}}>
+      <View style={styles.logoBox}>
+        <Image source={require('../../assets/logo.png')} style={styles.logoStyle} resizeMode="contain" />
+      </View>
+
+      <View style={styles.grid}>
+        <View style={styles.row}>
+          <Btn label="CODE128" val="code128" cur={type} set={setType} />
+          <Btn label="QR CODE" val="qr" cur={type} set={setType} />
+        </View>
+        <View style={styles.row}>
+          <Btn label="DATAMATRIX" val="datamatrix" cur={type} set={setType} />
+          <Btn label="현대기아 전용" val="datamatrix_hkmc" cur={type} set={setType} />
+        </View>
+      </View>
+
+      <View style={styles.inputWrapper}>
+        <TextInput
+          style={styles.input}
+          multiline
+          placeholder={"데이터를 입력하거나 스캔하세요.\n예) 품번,업체,수량"}
+          placeholderTextColor="#888"
+          value={input}
+          onChangeText={setInput}
+        />
+        {/* 초기화 버튼 (입력창 오른쪽 하단) */}
+        <TouchableOpacity style={styles.clearBtn} onPress={handleClear}>
+          <Text style={styles.clearBtnText}>전체 삭제</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.mainBtnRow}>
+        <TouchableOpacity style={styles.mainBtn} onPress={handleGenerate}>
+          <Text style={styles.mainBtnText}>바코드 일괄 생성</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.scanBtn} onPress={openScanner}>
+          <Text style={styles.mainBtnText}>🔍 스캔</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 리스트가 있을 때만 일괄 저장 버튼 표시 */}
+      {list.length > 0 && (
+        <TouchableOpacity style={styles.saveAllBtn} onPress={saveAllImages}>
+          <Text style={styles.saveAllBtnText}>📂 사진첩에 전체 저장하기 ({list.length}건)</Text>
+        </TouchableOpacity>
+      )}
+
+      {list.map((item) => (
+        <View key={item.key} style={styles.card}>
+          <Text style={styles.cardText}>{item.data}</Text>
+          <View style={styles.imageBox}>
+            <Image source={{ uri: item.url }} style={styles.barcodeImg} resizeMode="contain" />
+          </View>
+          <TouchableOpacity onPress={() => saveImage(item.url)} style={styles.saveBtn}>
+            <Text style={styles.saveBtnText}>📷 사진첩에 저장</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+const Btn = ({ label, val, cur, set }) => (
+  <TouchableOpacity style={[styles.smallBtn, cur === val ? styles.btnOn : styles.btnOff]} onPress={() => set(val)}>
+    <Text style={{ color: cur === val ? '#fff' : '#333', fontWeight: 'bold' }}>{label}</Text>
+  </TouchableOpacity>
+);
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20, backgroundColor: '#f4f6f9' },
+  logoBox: { alignItems: 'center', marginVertical: 35 },
+  logoStyle: { width: screenWidth * 0.7, height: 60 },
+  grid: { marginBottom: 20 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  smallBtn: { flex: 0.48, padding: 15, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ccc' },
+  btnOn: { backgroundColor: '#002c5f', borderColor: '#002c5f' },
+  btnOff: { backgroundColor: '#fff' },
+  inputWrapper: { position: 'relative' },
+  input: { height: 160, padding: 15, backgroundColor: '#fff', borderRadius: 12, borderWidth: 2, borderColor: '#002c5f', textAlignVertical: 'top', color: '#000' },
+  clearBtn: { position: 'absolute', bottom: 10, right: 10, backgroundColor: '#ff4d4d', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 5 },
+  clearBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  mainBtnRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
+  mainBtn: { flex: 0.7, backgroundColor: '#f9c400', padding: 18, borderRadius: 12, alignItems: 'center' },
+  scanBtn: { flex: 0.25, backgroundColor: '#ddd', padding: 18, borderRadius: 12, alignItems: 'center' },
+  mainBtnText: { fontSize: 16, fontWeight: 'bold', color: '#002c5f' },
+  saveAllBtn: { backgroundColor: '#002c5f', padding: 15, borderRadius: 12, marginTop: 20, alignItems: 'center' },
+  saveAllBtnText: { color: '#fff', fontWeight: 'bold' },
+  card: { backgroundColor: '#fff', padding: 20, borderRadius: 15, marginTop: 20, alignItems: 'center', elevation: 3 },
+  cardText: { fontSize: 13, marginBottom: 15, fontWeight: 'bold', color: '#444' },
+  imageBox: { width: '100%', height: 120, justifyContent: 'center', alignItems: 'center' },
+  barcodeImg: { width: screenWidth - 100, height: 100 },
+  saveBtn: { marginTop: 15, padding: 10, backgroundColor: '#eef2ff', borderRadius: 8 },
+  saveBtnText: { color: '#007aff', fontWeight: 'bold' },
+  scannerContainer: { flex: 1, backgroundColor: '#000' },
+  closeBtn: { position: 'absolute', bottom: 50, alignSelf: 'center', backgroundColor: '#002c5f', paddingVertical: 15, paddingHorizontal: 40, borderRadius: 30 },
+  closeBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 18 }
+});
