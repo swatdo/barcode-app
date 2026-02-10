@@ -96,23 +96,22 @@
 
         lines.forEach((line, i) => {
             let data = line.trim();
-            let displayText = data; // 화면에 보여줄 텍스트
+            let displayText = data;
             let format = currentType;
             
             if (currentType === 'datamatrix_hkmc') {
                 const parts = data.split(/[, |\t|;]+/).filter(p => p.trim() !== '');
                 if (parts.length >= 3) {
-                    format = 'datamatrix';
+                    format = 'datamatrix'; // HKMC 모드는 강제로 datamatrix 사용
                     const RS = String.fromCharCode(30);
                     const GS = String.fromCharCode(29);
                     const EOT = String.fromCharCode(4);
                     
-                    // [)> + RS + 06 + GS + 본문 + RS + EOT
                     let body = `P${parts[0].trim()}${GS}V${parts[1].trim()}${GS}Q${parts[2].trim()}`;
                     if (parts.length >= 4) body += `${GS}A${parts[3].trim()}`;
                     
                     data = `[)>${RS}06${GS}${body}${RS}${EOT}`;
-                    displayText = `(HKMC 표준) ${parts[0].trim()}...`;
+                    displayText = `(HKMC 표준) ${parts[0].trim()}`;
                 } else {
                     alert(`[${i+1}행] 데이터가 부족합니다.`);
                     return;
@@ -129,12 +128,13 @@
         card.innerHTML = `<div class="card-text">${displayText}</div><canvas id="canvas-${Math.random().toString(36).substr(2, 9)}"></canvas>`;
         document.getElementById('result-list').appendChild(card);
         const canvas = card.querySelector('canvas');
+        
+        // 2D 바코드(QR, DataMatrix)는 API를 통해 생성
         if(format === 'code128') {
             JsBarcode(canvas, data, { format: "CODE128", width: 2, height: 80 });
         } else {
             const img = new Image();
             img.crossOrigin = "anonymous";
-            // 데이터매트릭스 생성 API 호출
             img.src = `https://barcodeapi.org/api/${format}/${encodeURIComponent(data)}`;
             img.onload = () => {
                 const ctx = canvas.getContext('2d');
