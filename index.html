@@ -87,38 +87,50 @@
         }
     }
 
-    function handleGenerate() {
+function handleGenerate() {
         const input = document.getElementById('barcode-input').value;
         if (!input.trim()) return alert("데이터를 입력해주세요!");
+        
         const lines = input.split('\n').filter(l => l.trim() !== '');
         const listContainer = document.getElementById('result-list');
         listContainer.innerHTML = ''; 
 
         lines.forEach((line, i) => {
-            let data = line.trim();
-            let displayText = data;
+            let rawData = line.trim();
+            let displayText = rawData;
             let format = currentType;
+            let finalData = rawData; // API로 보낼 최종 데이터
             
             if (currentType === 'datamatrix_hkmc') {
-                const parts = data.split(/[, |\t|;]+/).filter(p => p.trim() !== '');
+                // 쉼표, 탭, 공백 등 다양한 구분자 대응
+                const parts = rawData.split(/[, |\t|;]+/).filter(p => p.trim() !== '');
+                
                 if (parts.length >= 3) {
-                    format = 'datamatrix'; // HKMC 모드는 강제로 datamatrix 사용
-                    const RS = String.fromCharCode(30);
-                    const GS = String.fromCharCode(29);
-                    const EOT = String.fromCharCode(4);
+                    format = 'datamatrix';
                     
+                    // HKMC 표준 제어 문자 (ASCII)
+                    const RS = String.fromCharCode(30); // Record Separator
+                    const GS = String.fromCharCode(29); // Group Separator
+                    const EOT = String.fromCharCode(4); // End of Transmission
+                    
+                    // 데이터 조합: [)> + RS + 06 + GS + P품번 + GS + V업체 + GS + Q수량 (+ GS + A알시코드) + RS + EOT
                     let body = `P${parts[0].trim()}${GS}V${parts[1].trim()}${GS}Q${parts[2].trim()}`;
-                    if (parts.length >= 4) body += `${GS}A${parts[3].trim()}`;
+                    if (parts.length >= 4) {
+                        body += `${GS}A${parts[3].trim()}`;
+                    }
                     
-                    data = `[)>${RS}06${GS}${body}${RS}${EOT}`;
+                    finalData = `[)>${RS}06${GS}${body}${RS}${EOT}`;
                     displayText = `(HKMC 표준) ${parts[0].trim()}`;
                 } else {
-                    alert(`[${i+1}행] 데이터가 부족합니다.`);
+                    alert(`[${i+1}행] 데이터 부족: 품번, 업체코드, 수량 순으로 입력하세요.`);
                     return;
                 }
             }
-            createCard(data, format, displayText);
+            
+            // 바코드 카드 생성 함수 호출 (수정된 데이터 전달)
+            createCard(finalData, format, displayText);
         });
+        
         if (lines.length > 0) document.getElementById('save-all-btn').style.display = 'block';
     }
 
