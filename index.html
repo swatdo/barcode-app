@@ -1,6 +1,184 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hoonyverse Barcode</title>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://unpkg.com/bwip-js/dist/bwip-js-min.js"></script>
+
+<style>
+:root { --main-blue:#002c5f; --main-yellow:#f9c400; }
+body { font-family:-apple-system,sans-serif; background:#f4f6f9; margin:0; padding:20px; }
+.container { max-width:500px; margin:auto; }
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.type-btn { padding:12px; border-radius:10px; border:1px solid #ccc; background:#fff; font-weight:bold; cursor:pointer; }
+.type-btn.active { background:var(--main-blue); color:#fff; }
+textarea { width:100%; height:140px; border:none; resize:none; }
+.input-wrapper { border:2px solid var(--main-blue); border-radius:12px; padding:10px; background:#fff; }
+.btn-row { display:flex; gap:8px; margin-top:15px; }
+button { border:none; border-radius:12px; padding:12px; font-weight:bold; cursor:pointer; }
+.main-btn { flex:2; background:var(--main-yellow); }
+.scan-btn { flex:1; background:#ddd; }
+.clear-btn { flex:1; background:#ff4d4d; color:#fff; }
+.card { background:#fff; padding:15px; margin-top:20px; border-radius:15px; text-align:center; }
+.card-text { font-size:12px; margin-bottom:10px; color:#555; }
+.download-btn { margin-top:10px; background:#eef2ff; }
+#reader { display:none; margin-top:10px; }
+#save-all-btn { display:none; width:100%; margin-top:15px; background:var(--main-blue); color:#fff; }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<div class="grid">
+<button class="type-btn active" onclick="setType('code128', this)">CODE128</button>
+<button class="type-btn" onclick="setType('qr', this)">QR CODE</button>
+<button class="type-btn" onclick="setType('datamatrix', this)">DATAMATRIX</button>
+<button class="type-btn" onclick="setType('datamatrix_hkmc', this)">현대기아 전용</button>
+</div>
+
+<div class="input-wrapper">
+<textarea id="barcode-input" placeholder="데이터를 입력하거나 스캔하세요.&#13;&#10;[HKMC 전용 모드 도움말]&#13;&#10;품번, 업체코드, 수량, ALC코드 순으로 입력&#13;&#10;예) 81970F2000,VABC,100,G01"></textarea>
+</div>
+
+<div class="btn-row">
+<button class="scan-btn" onclick="toggleScanner()">스캔</button>
+<button class="main-btn" onclick="handleGenerate()">생성</button>
+<button class="clear-btn" onclick="handleClear()">삭제</button>
+</div>
+
+<button id="save-all-btn" onclick="downloadAll()">ZIP 저장</button>
+<div id="reader"></div>
+<div id="result-list"></div>
+
+</div>
+
+<script>
+let currentType = 'code128';
+let html5QrcodeScanner = null;
+
+function setType(type, btn) {
+    currentType = type;
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+function handleClear() {
+    document.getElementById('barcode-input').value = '';
+    document.getElementById('result-list').innerHTML = '';
+    document.getElementById('save-all-btn').style.display = 'none';
+}
+
+function toggleScanner() {
+    const reader = document.getElementById('reader');
+    if (reader.style.display === 'block') {
+        reader.style.display = 'none';
+        html5QrcodeScanner?.clear();
+    } else {
+        reader.style.display = 'block';
+        html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps:10, qrbox:250 });
+        html5QrcodeScanner.render(text => {
+            document.getElementById('barcode-input').value += text;
+            toggleScanner();
+        });
+    }
+}
+
+function handleGenerate() {
+    const input = document.getElementById('barcode-input').value.trim();
+    if (!input) return alert("데이터 입력");
+
+    document.getElementById('result-list').innerHTML = '';
+
+    let format = currentType;
+    let data = input;
+    let display = input;
+
+    if (currentType === 'datamatrix_hkmc') {
+        const p = input.split(/[,|\s]+/);
+        const RS = String.fromCharCode(30);
+        const GS = String.fromCharCode(29);
+        const EOT = String.fromCharCode(4);
+
+        let body = `P${p[0]}${GS}V${p[1]}${GS}Q${p[2]}`;
+        if (p[3]) body += `${GS}A${p[3]}`;
+
+        data = `[)>${RS}06${GS}${body}${RS}${EOT}`;
+        format = 'datamatrix';
+        display = `(HKMC) ${p[0]}`;
+    }
+
+    createCard(data, format, display);
+    document.getElementById('save-all-btn').style.display = 'block';
+}
+
+function createCard(data, format, displayText) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="card-text">${displayText}</div><canvas></canvas>`;
+    document.getElementById('result-list').appendChild(card);
+
+    const canvas = card.querySelector('canvas');
+
+    if (format === 'code128') {
+        JsBarcode(canvas, data, { format:"CODE128", width:2, height:80 });
+
+    } else if (format === 'datamatrix' && data.includes('[)>')) {
+        bwipjs.toCanvas(canvas, {
+            bcid:'datamatrix',
+            text:data,
+            scale:4,
+            padding:10,
+            backgroundcolor:'FFFFFF'
+        });
+
+    } else {
+        const img = new Image();
+        img.src = `https://barcodeapi.org/api/${format}/${encodeURIComponent(data)}`;
+        img.onload = () => {
+            const ctx = canvas.getContext('2d');
+            canvas.width = 300;
+            canvas.height = 300;
+            ctx.drawImage(img, 0, 0, 300, 300);
+        };
+    }
+
+    const btn = document.createElement('button');
+    btn.className = 'download-btn';
+    btn.textContent = '이미지 저장';
+    btn.onclick = () => {
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL();
+        a.download = 'barcode.png';
+        a.click();
+    };
+    card.appendChild(btn);
+}
+
+async function downloadAll() {
+    const zip = new JSZip();
+    document.querySelectorAll('canvas').forEach((c, i) => {
+        zip.file(`barcode_${i+1}.png`, c.toDataURL().split(',')[1], { base64:true });
+    });
+    const blob = await zip.generateAsync({ type:'blob' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'barcodes.zip';
+    a.click();
+}
+</script>
+</body>
+</html>
+
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Hoonyverse Barcode</title>
