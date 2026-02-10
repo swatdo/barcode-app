@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -10,16 +11,35 @@
         :root { --main-blue: #002c5f; --main-yellow: #f9c400; }
         body { font-family: -apple-system, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
         .container { max-width: 500px; margin: auto; }
-        .logo { text-align: center; font-size: 24px; font-weight: bold; color: var(--main-blue); margin: 20px 0; }
+        
+        .logo { text-align: center; margin: 20px 0; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
         .type-btn { padding: 12px; border: 1px solid #ccc; border-radius: 10px; background: #fff; cursor: pointer; font-weight: bold; }
         .type-btn.active { background: var(--main-blue); color: #fff; border-color: var(--main-blue); }
+        
         .input-wrapper { background: #fff; border: 2px solid var(--main-blue); border-radius: 12px; padding: 10px; position: relative; }
         textarea { width: 100%; height: 120px; border: none; outline: none; resize: none; font-size: 14px; box-sizing: border-box; }
-        .clear-btn { background: #ff4d4d; color: #fff; border: none; padding: 5px 10px; border-radius: 5px; font-size: 12px; cursor: pointer; margin-top: 5px; float: right; }
-        .btn-row { display: flex; gap: 10px; margin-top: 20px; clear: both; }
-        .main-btn { flex: 2; background: var(--main-yellow); color: var(--main-blue); border: none; padding: 15px; border-radius: 12px; font-weight: bold; font-size: 16px; }
-        .scan-btn { flex: 1; background: #ddd; border: none; border-radius: 12px; font-weight: bold; }
+
+        /* 버튼 한 줄 정렬 및 글자 크기 설정 */
+        .btn-row { display: flex; gap: 8px; margin-top: 20px; }
+        
+        /* 1. 생성 버튼 (가장 큼) */
+        .main-btn { 
+            flex: 2; background: var(--main-yellow); color: var(--main-blue); 
+            border: none; padding: 15px 5px; border-radius: 12px; 
+            font-weight: bold; font-size: 18px; cursor: pointer; 
+        }
+        /* 2. 스캔 버튼 */
+        .scan-btn { 
+            flex: 1; background: #ddd; border: none; border-radius: 12px; 
+            font-weight: bold; font-size: 16px; cursor: pointer; 
+        }
+        /* 3. 삭제 버튼 */
+        .clear-btn { 
+            flex: 1; background: #ff4d4d; color: #fff; border: none; 
+            border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; 
+        }
+
         #reader { width: 100%; border-radius: 12px; overflow: hidden; margin-top: 10px; display: none; }
         .card { background: #fff; padding: 20px; border-radius: 15px; margin-top: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .card-text { font-size: 13px; font-weight: bold; color: #444; margin-bottom: 10px; word-break: break-all; }
@@ -30,40 +50,47 @@
 <body>
 <div class="container">
     <div class="logo">
-    <img src="logo.png" alt="Hoonyverse Logo" style="width: 50%; max-width: 300px; height: auto;">
-</div>
+        <img src="logo.png" alt="Hoonyverse Logo" style="width: 50%; max-width: 300px; height: auto;">
+    </div>
+    
     <div class="grid">
         <button class="type-btn active" onclick="setType('code128', this)">CODE128</button>
         <button class="type-btn" onclick="setType('qr', this)">QR CODE</button>
         <button class="type-btn" onclick="setType('datamatrix', this)">DATAMATRIX</button>
         <button class="type-btn" onclick="setType('datamatrix_hkmc', this)">현대기아 전용</button>
     </div>
+
     <div class="input-wrapper">
         <textarea id="barcode-input" placeholder="데이터를 입력하거나 스캔하세요.&#13;&#10;예) 품번,업체,수량"></textarea>
-        <button class="clear-btn" onclick="handleClear()">전체 삭제</button>
     </div>
-  <div class="btn-row" style="display: flex; gap: 8px;">
-    <button class="scan-btn" style="flex: 1;">🔍 스캔</button>
-    <button class="main-btn" style="flex: 2;">바코드 생성</button>  
-    <button class="clear-btn" style="flex: 1;">삭제</button>
-</div>
+
+    <div class="btn-row">
+        <button class="scan-btn" onclick="toggleScanner()">🔍 스캔</button>
+        <button class="main-btn" onclick="handleGenerate()">바코드 생성</button>  
+        <button class="clear-btn" onclick="handleClear()">삭제</button>
+    </div>
+
     <div id="reader"></div>
     <div id="result-list"></div>
 </div>
+
 <script>
     let currentType = 'code128';
     let html5QrcodeScanner = null;
+
     function setType(val, btn) {
         currentType = val;
         document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
     }
+
     function handleClear() {
         if(confirm("모든 내용을 지우시겠습니까?")) {
             document.getElementById('barcode-input').value = '';
             document.getElementById('result-list').innerHTML = '';
         }
     }
+
     function toggleScanner() {
         const readerDiv = document.getElementById('reader');
         if (readerDiv.style.display === 'block') {
@@ -79,6 +106,7 @@
             });
         }
     }
+
     function handleGenerate() {
         const input = document.getElementById('barcode-input').value;
         if (!input.trim()) return alert("데이터를 입력해주세요!");
@@ -100,6 +128,7 @@
             createCard(data, format);
         });
     }
+
     function createCard(data, format) {
         const card = document.createElement('div');
         card.className = 'card';
