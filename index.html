@@ -115,7 +115,7 @@ function handleGenerate() {
                     if (parts.length >= 4) body += `${GS}A${parts[3].trim()}`;
                     
                     data = `[)>${RS}06${GS}${body}${RS}${EOT}`;
-                    displayText = `[HKMC] 품번:${parts[0].trim()} / 업체:${parts[1].trim()} / 수량:${parts[2].trim()}`;
+                    displayText = `(HKMC) ${parts[0].trim()} | ${parts[1].trim()} | ${parts[2].trim()}${parts[3] ? ' | ' + parts[3] : ''}`;
                 } else {
                     alert(`[${i+1}행] 데이터 부족: 품번, 업체코드, 수량이 필요합니다.`);
                     return;
