@@ -134,39 +134,50 @@ function handleGenerate() {
         
         if (lines.length > 0) document.getElementById('save-all-btn').style.display = 'block';
     }
+function createCard(data, format, displayText) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+        <div class="card-text">${displayText}</div>
+        <canvas id="canvas-${Math.random().toString(36).substr(2, 9)}"></canvas>
+    `;
+    document.getElementById('result-list').appendChild(card);
 
-if (format === 'code128') {
-    JsBarcode(canvas, data, { format: "CODE128", width: 2, height: 80 });
+    const canvas = card.querySelector('canvas');
 
-} else if (format === 'datamatrix' && data.includes('[)>')) {
-    // ✅ 현대기아(HKMC) 전용 DataMatrix
-    try {
-        bwipjs.toCanvas(canvas, {
-            bcid: 'datamatrix',
-            text: data,
-            scale: 4,
-            padding: 10,
-            backgroundcolor: 'FFFFFF'
+    if (format === 'code128') {
+        JsBarcode(canvas, data, {
+            format: "CODE128",
+            width: 2,
+            height: 80
         });
-    } catch (e) {
-        console.error(e);
-        alert('HKMC DataMatrix 생성 실패');
-    }
 
-} else {
-    // 기존 QR / 일반 DataMatrix
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = `https://barcodeapi.org/api/${format}/${encodeURIComponent(data)}`;
-    img.onload = () => {
-        const ctx = canvas.getContext('2d');
-        canvas.width = 350;
-        canvas.height = 350;
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 25, 25, 300, 300);
-    };
-}
+    } else if (format === 'datamatrix' && data.includes('[)>')) {
+        // ✅ 현대기아(HKMC) 전용 DataMatrix
+        try {
+            bwipjs.toCanvas(canvas, {
+                bcid: 'datamatrix',
+                text: data,
+                scale: 4,
+                padding: 10,
+                backgroundcolor: 'FFFFFF'
+            });
+        } catch (e) {
+            console.error(e);
+            alert('HKMC DataMatrix 생성 실패');
+        }
+
+    } else {
+        // 기존 QR / 일반 DataMatrix
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = `https://barcodeapi.org/api/${format}/${encodeURIComponent(data)}`;
+        img.onload = () => {
+            const ctx = canvas.getContext('2d');
+            canvas.width = 350;
+            can
+
+
         const saveBtn = document.createElement('button');
         saveBtn.className = 'download-btn';
         saveBtn.innerText = '📷 이미지로 저장';
