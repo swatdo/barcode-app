@@ -87,7 +87,7 @@
         }
     }
 
-    function handleGenerate() {
+function handleGenerate() {
         const input = document.getElementById('barcode-input').value;
         if (!input.trim()) return alert("데이터를 입력해주세요!");
         const lines = input.split('\n').filter(l => l.trim() !== '');
@@ -100,20 +100,22 @@
             let format = currentType;
             
             if (currentType === 'datamatrix_hkmc') {
-                const parts = data.split(/[, |\t|;]+/).filter(p => p.trim() !== '');
+                // 구분자 정규식: 쉼표, 공백, 탭, 세미콜론 대응
+                const parts = data.split(/[, \t;]+/).filter(p => p.trim() !== '');
                 if (parts.length >= 3) {
-                    format = 'datamatrix'; // HKMC 모드는 강제로 datamatrix 사용
+                    format = 'datamatrix';
                     const RS = String.fromCharCode(30);
                     const GS = String.fromCharCode(29);
                     const EOT = String.fromCharCode(4);
                     
+                    // HKMC 표준 헤더 및 데이터 조립
                     let body = `P${parts[0].trim()}${GS}V${parts[1].trim()}${GS}Q${parts[2].trim()}`;
                     if (parts.length >= 4) body += `${GS}A${parts[3].trim()}`;
                     
                     data = `[)>${RS}06${GS}${body}${RS}${EOT}`;
-                    displayText = `(HKMC 표준) ${parts[0].trim()}`;
+                    displayText = `(HKMC) ${parts[0].trim()}`;
                 } else {
-                    alert(`[${i+1}행] 데이터가 부족합니다.`);
+                    alert(`[${i+1}행] 데이터 부족: 품번, 업체코드, 수량이 필요합니다.`);
                     return;
                 }
             }
@@ -125,32 +127,50 @@
     function createCard(data, format, displayText) {
         const card = document.createElement('div');
         card.className = 'card';
-        card.innerHTML = `<div class="card-text">${displayText}</div><canvas id="canvas-${Math.random().toString(36).substr(2, 9)}"></canvas>`;
+        const canvasId = `canvas-${Math.random().toString(36).substr(2, 9)}`;
+        card.innerHTML = `<div class="card-text">${displayText}</div><canvas id="${canvasId}"></canvas>`;
         document.getElementById('result-list').appendChild(card);
-        const canvas = card.querySelector('canvas');
+        const canvas = document.getElementById(canvasId);
         
-        // 2D 바코드(QR, DataMatrix)는 API를 통해 생성
         if(format === 'code128') {
-            JsBarcode(canvas, data, { format: "CODE128", width: 2, height: 80 });
+            JsBarcode(canvas, data, { format: "CODE128", width: 2, height: 80, displayValue: false });
         } else {
+            // 외부 API 사용 시 인코딩 문제와 CORS 문제를 방지하기 위해 
+            // 처리 방식 개선 (인코딩된 데이터를 정확히 전달)
             const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.src = `https://barcodeapi.org/api/${format}/${encodeURIComponent(data)}`;
+            img.crossOrigin = "anonymous"; // CORS 이슈 방지
+            
+            // 특수문자가 포함된 경우를 위해 명확한 인코딩 처리
+            const encodedData = encodeURIComponent(data);
+            img.src = `https://barcodeapi.org/api/${format}/${encodedData}`;
+            
             img.onload = () => {
                 const ctx = canvas.getContext('2d');
-                canvas.width = 350; canvas.height = 350;
-                ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 25, 25, 300, 300);
+                // 이미지 크기에 맞게 캔버스 사이즈 조정
+                canvas.width = 300; 
+                canvas.height = 300;
+                ctx.fillStyle = "white"; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 10, 10, 280, 280);
+            };
+            img.onerror = () => {
+                card.innerHTML = `<div class="card-text" style="color:red;">생성 실패: ${displayText}</div>`;
             };
         }
+
         const saveBtn = document.createElement('button');
         saveBtn.className = 'download-btn';
         saveBtn.innerText = '📷 이미지로 저장';
         saveBtn.onclick = () => {
-            const link = document.createElement('a');
-            link.download = `hkmc_barcode.png`;
-            link.href = canvas.toDataURL("image/png");
-            link.click();
+            try {
+                const link = document.createElement('a');
+                link.download = `barcode_${displayText.replace(/[^a-z0-9]/gi, '_')}.png`;
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+            } catch (e) {
+                alert("이미지 저장 중 오류가 발생했습니다. 브라우저 보안 정책 때문일 수 있습니다.");
+                console.error(e);
+            }
         };
         card.appendChild(saveBtn);
     }
