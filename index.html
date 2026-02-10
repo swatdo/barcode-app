@@ -69,7 +69,11 @@
         <button class="main-btn" onclick="handleGenerate()">바코드 생성</button>  
         <button class="clear-btn" onclick="handleClear()">삭제</button>
     </div>
-
+<div id="save-all-container" style="display:none; margin-top: 15px;">
+    <button onclick="downloadAll()" style="width:100%; background:var(--main-blue); color:#fff; border:none; padding:15px; border-radius:12px; font-weight:bold; font-size:16px;">
+        📂 생성된 바코드 전체 저장 (ZIP)
+    </button>
+</div>
     <div id="reader"></div>
     <div id="result-list"></div>
 </div>
@@ -161,6 +165,39 @@
         };
         card.appendChild(saveBtn);
     }
+// 바코드 생성 시 버튼 보이기/숨기기 처리
+function handleGenerate() {
+    const input = document.getElementById('barcode-input').value;
+    if (!input.trim()) return alert("데이터를 입력해주세요!");
+    
+    // ... 기존 생성 로직 ...
+    
+    // 모든 생성이 끝난 후 일괄 저장 버튼 표시
+    document.getElementById('save-all-container').style.display = 'block';
+}
+
+// 전체 다운로드 함수
+async function downloadAll() {
+    const zip = new JSZip();
+    const canvases = document.querySelectorAll('.card canvas');
+    
+    if (canvases.length === 0) return alert("저장할 바코드가 없습니다.");
+    
+    alert(`${canvases.length}개의 바코드를 압축합니다. 잠시만 기다려주세요.`);
+
+    for (let i = 0; i < canvases.length; i++) {
+        const dataUrl = canvases[i].toDataURL("image/png");
+        const base64Data = dataUrl.split(',')[1];
+        const fileName = `barcode_${i + 1}.png`;
+        zip.file(fileName, base64Data, {base64: true});
+    }
+
+    const content = await zip.generateAsync({type: "blob"});
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(content);
+    link.download = "hoonyverse_barcodes.zip";
+    link.click();
+}
 </script>
 </body>
 </html>
