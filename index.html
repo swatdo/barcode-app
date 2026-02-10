@@ -7,6 +7,8 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://unpkg.com/bwip-js/dist/bwip-js-min.js"></script>
     <link rel="manifest" href="manifest.json">
     <style>
         :root { --main-blue: #002c5f; --main-yellow: #f9c400; }
@@ -131,30 +133,35 @@ function handleGenerate() {
         card.innerHTML = `<div class="card-text">${displayText}</div><canvas id="${canvasId}"></canvas>`;
         document.getElementById('result-list').appendChild(card);
         const canvas = document.getElementById(canvasId);
-        
-        if(format === 'code128') {
-            JsBarcode(canvas, data, { format: "CODE128", width: 2, height: 80, displayValue: false });
-        } else {
-            // 외부 API 사용 시 인코딩 문제와 CORS 문제를 방지하기 위해 
-            // 처리 방식 개선 (인코딩된 데이터를 정확히 전달)
+    
+        if (format === 'code128') {
+            JsBarcode(canvas, data, { format: "CODE128", width: 2, height: 80 });
+        } 
+        // HKMC DataMatrix (제어문자 포함 여부로 판단)
+        else if (format === 'datamatrix' && data.includes('[)>')) {
+            try {
+                    bwipjs.toCanvas(canvas, {
+                    bcid: 'datamatrix', // 바코드 종류
+                    text: data,         // 데이터
+                    scale: 4,           // 확대 비율
+                    padding: 10,        // 여백
+                    backgroundcolor: 'FFFFFF'
+                });
+            } catch (e) {
+                console.error(e);
+                alert("바코드 생성 중 오류가 발생했습니다.");
+            }
+        } 
+        // 일반 QR 및 기타 2D 바코드
+        else {
             const img = new Image();
-            img.crossOrigin = "anonymous"; // CORS 이슈 방지
-            
-            // 특수문자가 포함된 경우를 위해 명확한 인코딩 처리
-            const encodedData = encodeURIComponent(data);
-            img.src = `https://barcodeapi.org/api/${format}/${encodedData}`;
-            
+            img.crossOrigin = "anonymous";
+            img.src = `https://barcodeapi.org/api/${format}/${encodeURIComponent(data)}`;
             img.onload = () => {
                 const ctx = canvas.getContext('2d');
-                // 이미지 크기에 맞게 캔버스 사이즈 조정
-                canvas.width = 300; 
-                canvas.height = 300;
-                ctx.fillStyle = "white"; 
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 10, 10, 280, 280);
-            };
-            img.onerror = () => {
-                card.innerHTML = `<div class="card-text" style="color:red;">생성 실패: ${displayText}</div>`;
+                canvas.width = 350; canvas.height = 350;
+                ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 25, 25, 300, 300);
             };
         }
 
