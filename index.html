@@ -73,18 +73,69 @@
         }
     }
 
+    // 삑 소리를 생성하는 함수
+    function playBeep() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); 
+            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); 
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.1);
+        } catch (e) {
+            console.error("Audio error:", e);
+        }
+    }
+
     function toggleScanner() {
         const readerDiv = document.getElementById('reader');
+        const scanBtn = document.querySelector('.scan-btn');
+
         if (readerDiv.style.display === 'block') {
+            // 스캔 종료 모드
             readerDiv.style.display = 'none';
-            if (html5QrcodeScanner) html5QrcodeScanner.clear();
+            scanBtn.innerText = '🔍 스캔';
+            scanBtn.style.background = '#ddd';
+            
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(err => console.error(err));
+            }
         } else {
+            // 스캔 시작 모드
             readerDiv.style.display = 'block';
-            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+            scanBtn.innerText = '🛑 스캔종료';
+            scanBtn.style.background = '#ffcccc';
+
+            if (!html5QrcodeScanner) {
+                html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+                    fps: 15, 
+                    qrbox: 250 
+                });
+            }
+
+            let lastScanned = ""; 
             html5QrcodeScanner.render((text) => {
-                const input = document.getElementById('barcode-input');
-                input.value += (input.value ? "\n" : "") + text;
-                toggleScanner();
+                // 연속 스캔 처리 (2초 이내 동일 바코드 중복 스캔 방지)
+                if (text !== lastScanned) { 
+                    lastScanned = text;
+                    playBeep(); // 삑 소리 발생
+                    
+                    const input = document.getElementById('barcode-input');
+                    input.value += (input.value ? "\n" : "") + text;
+                    
+                    if (navigator.vibrate) navigator.vibrate(100); // 진동 피드백
+                    
+                    setTimeout(() => { lastScanned = ""; }, 2000);
+                }
+            }, (error) => {
+                // 스캔 중 에러는 무시
             });
         }
     }
