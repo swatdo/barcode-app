@@ -26,7 +26,7 @@
         #save-all-btn { display: none; width: 100%; background: var(--main-blue); color: #fff; border: none; padding: 15px; border-radius: 12px; font-weight: bold; font-size: 16px; margin-top: 20px; cursor: pointer; }
         #reader { width: 100%; border-radius: 12px; overflow: hidden; margin-top: 10px; display: none; }
         .card { background: #fff; padding: 20px; border-radius: 15px; margin-top: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .card-text { font-size: 13px; font-weight: bold; color: #444; margin-bottom: 10px; word-break: break-all; }
+        .card-text { font-size: 12px; font-weight: bold; color: #888; margin-bottom: 10px; word-break: break-all; background: #f9f9f9; padding: 5px; border-radius: 5px; }
         canvas { max-width: 100%; height: auto !important; }
         .download-btn { margin-top: 15px; background: #eef2ff; color: #007aff; border: none; padding: 10px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; }
     </style>
@@ -41,7 +41,7 @@
         <button class="type-btn" onclick="setType('datamatrix_hkmc', this)">현대기아 전용</button>
     </div>
     <div class="input-wrapper">
-        <textarea id="barcode-input" placeholder="데이터를 입력하거나 스캔하세요.&#13;&#10;[HKMC 전용 모드 도움말]&#13;&#10;품번, 업체코드, 수량, ALC코드 순으로 입력&#13;&#10;예) 81970F2000,VABC,100,G01"></textarea>
+        <textarea id="barcode-input" placeholder="데이터를 입력하거나 스캔하세요.&#13;&#10;[HKMC 모드 입력 예시]&#13;&#10;품번, 업체코드, 수량, ALC코드"></textarea>
     </div>
     <div class="btn-row">
         <button class="scan-btn" onclick="toggleScanner()">🔍 스캔</button>
@@ -96,35 +96,37 @@
 
         lines.forEach((line, i) => {
             let data = line.trim();
+            let displayText = data; // 화면에 보여줄 텍스트
             let format = currentType;
             
             if (currentType === 'datamatrix_hkmc') {
-                // 공백, 쉼표, 탭 등 다양한 구분자로 데이터를 분리
                 const parts = data.split(/[, |\t|;]+/).filter(p => p.trim() !== '');
-                
                 if (parts.length >= 3) {
                     format = 'datamatrix';
-                    // P품번 V업체 Q수량
-                    let hkmcData = `P${parts[0].trim()}V${parts[1].trim()}Q${parts[2].trim()}`;
-                    // ALC 코드가 있으면 A 추가
-                    if (parts.length >= 4) {
-                        hkmcData += `A${parts[3].trim()}`;
-                    }
-                    data = hkmcData;
+                    const RS = String.fromCharCode(30);
+                    const GS = String.fromCharCode(29);
+                    const EOT = String.fromCharCode(4);
+                    
+                    // [)> + RS + 06 + GS + 본문 + RS + EOT
+                    let body = `P${parts[0].trim()}${GS}V${parts[1].trim()}${GS}Q${parts[2].trim()}`;
+                    if (parts.length >= 4) body += `${GS}A${parts[3].trim()}`;
+                    
+                    data = `[)>${RS}06${GS}${body}${RS}${EOT}`;
+                    displayText = `(HKMC 표준) ${parts[0].trim()}...`;
                 } else {
-                    alert(`[${i+1}행] 현대기아 모드는 최소 3개(품번,업체,수량)의 데이터가 필요합니다.`);
+                    alert(`[${i+1}행] 데이터가 부족합니다.`);
                     return;
                 }
             }
-            createCard(data, format);
+            createCard(data, format, displayText);
         });
         if (lines.length > 0) document.getElementById('save-all-btn').style.display = 'block';
     }
 
-    function createCard(data, format) {
+    function createCard(data, format, displayText) {
         const card = document.createElement('div');
         card.className = 'card';
-        card.innerHTML = `<div class="card-text">${data}</div><canvas id="canvas-${Math.random().toString(36).substr(2, 9)}"></canvas>`;
+        card.innerHTML = `<div class="card-text">${displayText}</div><canvas id="canvas-${Math.random().toString(36).substr(2, 9)}"></canvas>`;
         document.getElementById('result-list').appendChild(card);
         const canvas = card.querySelector('canvas');
         if(format === 'code128') {
@@ -132,12 +134,13 @@
         } else {
             const img = new Image();
             img.crossOrigin = "anonymous";
+            // 데이터매트릭스 생성 API 호출
             img.src = `https://barcodeapi.org/api/${format}/${encodeURIComponent(data)}`;
             img.onload = () => {
                 const ctx = canvas.getContext('2d');
-                canvas.width = 300; canvas.height = 300;
+                canvas.width = 350; canvas.height = 350;
                 ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 25, 25, 250, 250);
+                ctx.drawImage(img, 25, 25, 300, 300);
             };
         }
         const saveBtn = document.createElement('button');
@@ -145,7 +148,7 @@
         saveBtn.innerText = '📷 이미지로 저장';
         saveBtn.onclick = () => {
             const link = document.createElement('a');
-            link.download = `${data}.png`;
+            link.download = `hkmc_barcode.png`;
             link.href = canvas.toDataURL("image/png");
             link.click();
         };
@@ -159,9 +162,8 @@
         alert(`${cards.length}개의 바코드를 압축합니다.`);
         for (let i = 0; i < cards.length; i++) {
             const canvas = cards[i].querySelector('canvas');
-            const dataText = cards[i].querySelector('.card-text').innerText;
             const dataUrl = canvas.toDataURL("image/png");
-            zip.file(`${dataText.replace(/[/\\?%*:|"<>]/g, '-')}.png`, dataUrl.split(',')[1], {base64: true});
+            zip.file(`barcode_${i+1}.png`, dataUrl.split(',')[1], {base64: true});
         }
         const content = await zip.generateAsync({type: "blob"});
         const link = document.createElement("a");
