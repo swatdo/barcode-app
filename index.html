@@ -99,16 +99,13 @@
         const scanBtn = document.querySelector('.scan-btn');
 
         if (readerDiv.style.display === 'block') {
-            // 스캔 종료 모드
             readerDiv.style.display = 'none';
             scanBtn.innerText = '🔍 스캔';
             scanBtn.style.background = '#ddd';
-            
             if (html5QrcodeScanner) {
                 html5QrcodeScanner.clear().catch(err => console.error(err));
             }
         } else {
-            // 스캔 시작 모드
             readerDiv.style.display = 'block';
             scanBtn.innerText = '🛑 스캔종료';
             scanBtn.style.background = '#ffcccc';
@@ -120,6 +117,32 @@
                 });
             }
 
+            let lastScanned = ""; 
+            html5QrcodeScanner.render((text) => {
+                if (text !== lastScanned) { 
+                    lastScanned = text;
+                    playBeep();
+                    
+                    const input = document.getElementById('barcode-input');
+                    input.value += (input.value ? "\n" : "") + text;
+                    
+                    // --- [추가된 로직: URL인 경우 클릭 링크 생성] ---
+                    if (text.startsWith('http://') || text.startsWith('https://')) {
+                        const confirmLink = confirm(`링크가 감지되었습니다. 이동하시겠습니까?\n\n${text}`);
+                        if (confirmLink) {
+                            window.open(text, '_blank');
+                        }
+                    }
+                    // ----------------------------------------------
+                    
+                    if (navigator.vibrate) navigator.vibrate(100);
+                    setTimeout(() => { lastScanned = ""; }, 2000);
+                }
+            }, (error) => {
+                // 에러 무시
+            });
+        }
+    }
             let lastScanned = ""; 
             html5QrcodeScanner.render((text) => {
                 // 연속 스캔 처리 (2초 이내 동일 바코드 중복 스캔 방지)
