@@ -246,6 +246,24 @@
         link.download = "hoonyverse_barcodes.zip";
         link.click();
     }
+document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === 'visible') {
+        const readerDiv = document.getElementById('reader');
+        // 스캔 창이 열려있는 상태(display가 block)일 때만 재가동
+        if (readerDiv && readerDiv.style.display === 'block' && html5QrcodeScanner) {
+            console.log("카메라 재가동 시도 중...");
+            // 안전하게 기존 스캐너를 멈췄다가 다시 toggleScanner를 호출해 켭니다.
+            html5QrcodeScanner.clear().then(() => {
+                // 이미 화면이 'block' 상태이므로 toggleScanner를 한 번만 호출하면 꺼졌다가 다시 켜지며 초기화됩니다.
+                toggleScanner(); 
+                toggleScanner();
+            }).catch(() => {
+                // 이미 꺼져있거나 에러가 날 경우 바로 재시작
+                toggleScanner();
+            });
+        }
+    }
+});   
 </script>
 </body>
 </html>
